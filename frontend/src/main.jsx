@@ -25,8 +25,35 @@ async function api(path, opt = {}) {
   return data;
 }
 
+async function deleteOrder(order, afterDelete) {
+  const confirmed = window.confirm(
+    `Hapus transaksi ${order.order_no}? Stok bahan akan dikembalikan.`
+  );
+  if (!confirmed) return;
+
+  const reason = window.prompt(
+    'Masukkan alasan penghapusan transaksi (minimal 5 karakter):'
+  );
+  if (!reason || reason.trim().length < 5) {
+    alert('Penghapusan dibatalkan. Alasan minimal 5 karakter wajib diisi.');
+    return;
+  }
+
+  try {
+    await api('/orders/' + order.id, {
+      method: 'DELETE',
+      body: JSON.stringify({ reason: reason.trim() }),
+    });
+    if (afterDelete) await afterDelete();
+    alert(`Transaksi ${order.order_no} berhasil dihapus.`);
+  } catch (err) {
+    alert(err.message);
+  }
+}
+
 const roles = {
   CASHIER: ['cashier', 'bar', 'kitchen', 'report'],
+  HEAD_CASHIER: ['cashier', 'report'],
   WAREHOUSE: ['stock'],
   ADMIN: ['cashier', 'bar', 'kitchen', 'stock', 'report', 'settings'],
 };
@@ -89,6 +116,7 @@ function Login({ onLogin }) {
           onChange={(event) => setUsername(event.target.value)}
         >
           <option value="gary">Gary — Cashier</option>
+          <option value="headcashier">Head Cashier — Kepala Kasir</option>
           <option value="warehouse">Warehouse — Warehouse</option>
           <option value="admin">Admin — Admin</option>
         </select>
@@ -468,6 +496,15 @@ function Cashier({ user }) {
               >
                 Edit Receipt
               </button>
+
+              {(user?.role === 'HEAD_CASHIER' || user?.role === 'ADMIN') && (
+                <button
+                  type="button"
+                  onClick={() => deleteOrder(order, load)}
+                >
+                  Hapus
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -955,7 +992,7 @@ function Report({ user }) {
   useEffect(() => {
     load();
 
-    if (role === 'ADMIN') {
+    if (role === 'ADMIN' || role === 'HEAD_CASHIER') {
       api('/cashiers')
         .then((result) => {
           setCashiers(
@@ -975,7 +1012,7 @@ function Report({ user }) {
       <h2>📊 Reporting</h2>
 
       <p>
-        {role === 'ADMIN'
+        {role === 'ADMIN' || role === 'HEAD_CASHIER'
           ? 'Semua kasir'
           : `Transaksi ${
               user?.name || ''
@@ -1008,7 +1045,7 @@ function Report({ user }) {
           </option>
         </select>
 
-        {role === 'ADMIN' && (
+        {(role === 'ADMIN' || role === 'HEAD_CASHIER') && (
           <select
             value={cashier}
             onChange={(event) =>
@@ -1063,6 +1100,32 @@ function Report({ user }) {
             </div>
           </div>
 
+          {(role === 'HEAD_CASHIER' || role === 'ADMIN') && (
+            <>
+              <h3>Performa Kasir</h3>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Kasir</th>
+                    <th>Transaksi</th>
+                    <th>Omzet</th>
+                    <th>Item Terjual</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.performance || []).map((item) => (
+                    <tr key={item.name}>
+                      <td>{item.name}</td>
+                      <td>{item.transactions}</td>
+                      <td>Rp{Number(item.grossSales || 0).toLocaleString('id-ID')}</td>
+                      <td>{item.itemsSold}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+
           <h3>Sales by Menu</h3>
 
           <table>
@@ -1087,6 +1150,36 @@ function Report({ user }) {
                       item.revenue || 0
                     ).toLocaleString('id-ID')}
                   </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <h3>Daftar Transaksi</h3>
+          <table>
+            <thead>
+              <tr>
+                <th>No. Order</th>
+                <th>Kasir</th>
+                <th>Total</th>
+                <th>Payment</th>
+                <th>Tanggal</th>
+                {(role === 'HEAD_CASHIER' || role === 'ADMIN') && <th>Aksi</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {(data.transactions || []).map((order) => (
+                <tr key={order.id}>
+                  <td>{order.order_no}</td>
+                  <td>{order.cashier}</td>
+                  <td>Rp{Number(order.total || 0).toLocaleString('id-ID')}</td>
+                  <td>{order.payment_method || '-'}</td>
+                  <td>{new Date(order.created_at).toLocaleString('id-ID')}</td>
+                  {(role === 'HEAD_CASHIER' || role === 'ADMIN') && (
+                    <td>
+                      <button type="button" onClick={() => deleteOrder(order, load)}>Hapus</button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

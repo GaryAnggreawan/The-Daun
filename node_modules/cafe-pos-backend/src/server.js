@@ -218,7 +218,7 @@ app.put(
 app.post(
   '/api/orders',
   auth,
-  allow('CASHIER', 'ADMIN'),
+  allow('CASHIER', 'HEAD_CASHIER', 'ADMIN'),
   async (req, res) => {
     const client = await pool.connect();
 
@@ -499,7 +499,7 @@ app.get('/api/orders', auth, async (req, res) => {
   // Filter cashier untuk ADMIN
   // ----------------------------------------------------------
 
-  if (req.query.cashier && req.user.role === 'ADMIN') {
+  if (req.query.cashier && ['ADMIN', 'HEAD_CASHIER'].includes(req.user.role)) {
     params.push(req.query.cashier);
 
     where += where ? ' AND ' : 'WHERE ';
@@ -564,7 +564,7 @@ app.get('/api/orders', auth, async (req, res) => {
 app.put(
   '/api/orders/:id',
   auth,
-  allow('CASHIER', 'ADMIN'),
+  allow('CASHIER', 'HEAD_CASHIER', 'ADMIN'),
   async (req, res) => {
     const client = await pool.connect();
 
@@ -891,7 +891,7 @@ app.get('/api/station/:station', auth, async (req, res) => {
 app.patch(
   '/api/order-items/:id/status',
   auth,
-  allow('CASHIER', 'ADMIN'),
+  allow('CASHIER', 'HEAD_CASHIER', 'ADMIN'),
   async (req, res) => {
     const rows = await q(
       `
@@ -914,7 +914,7 @@ app.patch(
 app.get(
   '/api/reports',
   auth,
-  allow('CASHIER', 'ADMIN'),
+  allow('CASHIER', 'HEAD_CASHIER', 'ADMIN'),
   async (req, res) => {
     const params = [];
     let where = '';
@@ -1012,6 +1012,22 @@ app.get(
     }
 
     // ----------------------------------------------------------
+    // Performance per cashier
+    // ----------------------------------------------------------
+
+    const performanceMap = {};
+    for (const order of rows) {
+      const name = order.cashier || 'Unknown';
+      performanceMap[name] ??= { transactions: 0, grossSales: 0, itemsSold: 0 };
+      performanceMap[name].transactions += 1;
+      performanceMap[name].grossSales += Number(order.total || 0);
+      performanceMap[name].itemsSold += (order.items || []).reduce(
+        (sum, item) => sum + Number(item.qty || 0),
+        0
+      );
+    }
+
+    // ----------------------------------------------------------
     // Summary
     // ----------------------------------------------------------
 
@@ -1044,8 +1060,112 @@ app.get(
         })
       ),
 
+      performance: Object.entries(performanceMap).map(
+        ([name, value]) => ({ name, ...value })
+      ),
+
       summary,
     });
+  }
+);
+
+// ============================================================
+// Delete Order
+// ============================================================
+
+app.delete(
+  '/api/orders/:id',
+  auth,
+  allow('HEAD_CASHIER', 'ADMIN'),
+  async (req, res) => {
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      const reason = String(req.body?.reason || '').trim();
+      if (reason.length < 5) {
+        throw new Error('Alasan penghapusan wajib diisi minimal 5 karakter');
+      }
+
+      const orderResult = await client.query(
+        `SELECT o.*, u.display_name AS cashier
+         FROM orders o
+         LEFT JOIN users u ON u.id = o.cashier_id
+         WHERE o.id = $1
+         FOR UPDATE`,
+        [req.params.id]
+      );
+      const order = orderResult.rows[0];
+      if (!order) throw new Error('Transaksi tidak ditemukan');
+
+      const itemsResult = await client.query(
+        `SELECT oi.menu_id, oi.qty, r.ingredient_id, r.qty AS recipe_qty
+         FROM order_items oi
+         LEFT JOIN recipes r ON r.menu_id = oi.menu_id
+         WHERE oi.order_id = $1`,
+        [order.id]
+      );
+
+      for (const item of itemsResult.rows) {
+        if (!item.ingredient_id) continue;
+        await client.query(
+          `UPDATE ingredients SET stock = stock + $1, updated_at = now() WHERE id = $2`,
+          [Number(item.recipe_qty) * Number(item.qty), item.ingredient_id]
+        );
+      }
+
+      await client.query('DELETE FROM orders WHERE id = $1', [order.id]);
+
+      await client.query(
+        `INSERT INTO audit_logs
+          (actor_id, action, entity_type, entity_id, entity_ref, reason, metadata)
+         VALUES ($1, 'DELETE', 'ORDER', $2, $3, $4, $5)`,
+        [
+          req.user.id,
+          order.id,
+          order.order_no,
+          reason,
+          JSON.stringify({
+            cashierId: order.cashier_id,
+            cashierName: order.cashier,
+            total: order.total,
+            paymentMethod: order.payment_method,
+          }),
+        ]
+      );
+
+      await client.query('COMMIT');
+      res.json({ success: true, message: `Transaksi ${order.order_no} dihapus dan stok dikembalikan` });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      const status = error.message === 'Transaksi tidak ditemukan' ? 404 : 400;
+      res.status(status).json({ error: error.message });
+    } finally {
+      client.release();
+    }
+  }
+);
+
+// ============================================================
+// Audit Logs
+// ============================================================
+
+app.get(
+  '/api/audit-logs',
+  auth,
+  allow('HEAD_CASHIER', 'ADMIN'),
+  async (req, res) => {
+    const rows = await q(`
+      SELECT a.id, a.action, a.entity_type, a.entity_id, a.entity_ref,
+             a.reason, a.metadata, a.created_at,
+             u.display_name AS actor
+      FROM audit_logs a
+      LEFT JOIN users u ON u.id = a.actor_id
+      ORDER BY a.created_at DESC
+      LIMIT 200
+    `);
+    res.json(rows);
   }
 );
 
@@ -1056,7 +1176,7 @@ app.get(
 app.get(
   '/api/cashiers',
   auth,
-  allow('ADMIN'),
+  allow('ADMIN', 'HEAD_CASHIER'),
   async (_, res) => {
     const rows = await q(`
       SELECT
