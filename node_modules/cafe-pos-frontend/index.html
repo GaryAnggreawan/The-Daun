@@ -319,6 +319,23 @@ function renderCart(){
  c.innerHTML=state.items.map(i=>`<div class="cart-item"><div class="row"><div><div class="item-name">${esc(i.name)}</div><div class="muted">${i.station} · ${rupiah(i.price)}${i.mods?.sweet?' · '+i.mods.sweet:''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div></div><b>${rupiah(i.price*i.qty)}</b></div><div class="qty"><button onclick="changeQty('${i.key}',-1)">−</button><span>${i.qty}</span><button onclick="changeQty('${i.key}',1)">+</button><button class="remove" onclick="removeItem('${i.key}')">Hapus</button></div></div>`).join('');
 }
 
+function deleteOrder(orderNo){
+ if(currentUser.role!=='ADMIN'&&currentUser.role!=='HEAD_CASHIER'){toast('Hanya Admin/Head Cashier yang dapat menghapus transaksi');return}
+ const o=orders.find(x=>x.orderNo===orderNo);
+ if(!o)return;
+ if(!confirm('Hapus transaksi '+orderNo+'? Stok bahan akan dikembalikan.'))return;
+ const reason=prompt('Masukkan alasan penghapusan transaksi (minimal 5 karakter):');
+ if(!reason||reason.trim().length<5){toast('Penghapusan dibatalkan. Alasan minimal 5 karakter wajib diisi.');return}
+ reverseStock(o.items);
+ orders=orders.filter(x=>x.orderNo!==orderNo);
+ localStorage.setItem('cafePosOrders',JSON.stringify(orders));
+ const auditLogs=JSON.parse(localStorage.getItem('cafePosAuditLogs')||'[]');
+ auditLogs.unshift({action:'DELETE_ORDER',orderNo,actor:currentUser.name,reason:reason.trim(),total:o.total,deletedAt:new Date().toISOString()});
+ localStorage.setItem('cafePosAuditLogs',JSON.stringify(auditLogs.slice(0,200)));
+ renderAll();
+ toast('Transaksi '+orderNo+' berhasil dihapus');
+}
+
 function renderOrderInfo(){
  document.getElementById('orderTitle').textContent=state.orderNo||'Belum ada order';
  document.getElementById('orderMeta').textContent=state.orderNo?`${state.customer} · ${state.mode}${state.table?' · Table '+String(state.table).padStart(2,'0'):''} · ${state.pax} Pax${state.payment?' · '+state.payment:''}`:'Klik New Order untuk mulai';
@@ -455,7 +472,8 @@ function renderReport(){
  const salesArr=Object.entries(itemSales).sort((a,b)=>b[1].rev-a[1].rev);
  document.getElementById('salesReport').innerHTML='<tr><th>Item</th><th>Qty Sold</th><th>Total Revenue</th></tr>'+(salesArr.length?salesArr.map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${v.qty}</td><td>${rupiah(v.rev)}</td></tr>`).join(''):'<tr><td colspan="3" class="muted">Tidak ada data</td></tr>');
 
- document.getElementById('transactionReport').innerHTML='<tr><th>Order No</th><th>Time</th><th>Cashier</th><th>Mode</th><th>Payment</th><th>Total</th></tr>'+(filtered.length?filtered.map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${new Date(o.createdAt).toLocaleTimeString('id-ID')}</td><td>${o.cashier||'-'}</td><td>${o.mode}</td><td>${o.payment||'-'}</td><td>${rupiah(o.total)}</td></tr>`).join(''):'<tr><td colspan="6" class="muted">Tidak ada data</td></tr>');
+ const canDelete=currentUser.role==='ADMIN'||currentUser.role==='HEAD_CASHIER';
+document.getElementById('transactionReport').innerHTML='<tr><th>Order No</th><th>Time</th><th>Cashier</th><th>Mode</th><th>Payment</th><th>Total</th>'+(canDelete?'<th>Aksi</th>':'')+'</tr>'+(filtered.length?filtered.map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${new Date(o.createdAt).toLocaleTimeString('id-ID')}</td><td>${o.cashier||'-'}</td><td>${o.mode}</td><td>${o.payment||'-'}</td><td>${rupiah(o.total)}</td>${canDelete?`<td><button onclick="deleteOrder('${o.orderNo}')">Hapus</button></td>`:''}</tr>`).join(''):'<tr><td colspan="'+(canDelete?7:6)+'" class="muted">Tidak ada data</td></tr>');
 }
 
 function renderAll(){
