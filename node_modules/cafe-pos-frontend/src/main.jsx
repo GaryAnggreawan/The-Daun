@@ -567,7 +567,7 @@ function Cashier({ user }) {
         {cart.length === 0 ? (
           <p className="empty">Belum ada item</p>
         ) : (
-          cart.map((item) => {
+          cart.map((item, index) => {
             const menu = menus.find(
               (m) => m.id === item.menuId
             );

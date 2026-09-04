@@ -26,7 +26,7 @@ button,input,select{font:inherit}button{cursor:pointer;border:0}.app{min-height:
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.52);display:flex;align-items:center;justify-content:center;padding:18px;z-index:20}
 .modal{background:#fff;border-radius:16px;width:min(760px,100%);max-height:92vh;overflow:auto;padding:20px}.modal h2{margin:0 0 4px}.modal-sub{color:#777;font-size:13px;margin-bottom:18px}
 label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=text],select{width:100%;padding:11px;border:1px solid #d8dadd;border-radius:9px}
-.tables{display:grid;grid-template-columns:repeat(6,1fr);gap:7px}.table-btn{padding:11px 4px;border-radius:8px;background:#f0f2f4}.table-btn.selected{background:#17191d;color:#fff}
+.tables{display:grid;grid-template-columns:repeat(8,1fr);gap:7px;max-height:260px;overflow:auto;padding:2px}.table-btn{padding:11px 4px;border-radius:8px;background:#f0f2f4}.table-btn.selected{background:#17191d;color:#fff}
 .segment{display:flex;gap:7px}.segment button{flex:1;padding:11px;border-radius:9px;background:#f0f2f4}.segment button.selected{background:#17191d;color:#fff}
 .actions{display:flex;gap:9px;margin-top:18px}.actions button{flex:1;padding:12px;border-radius:9px}.cancel{background:#eee}
 .mod-group{margin-top:14px}.mod-group h3{font-size:14px;margin:0 0 8px}.mod-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.mod-option{border:1px solid #ddd;border-radius:10px;padding:11px;background:#fff;text-align:left}.mod-option.selected{border-color:#17191d;background:#f1f1f1}
@@ -38,6 +38,18 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
 .toast{position:fixed;right:18px;bottom:18px;background:#17191d;color:#fff;padding:12px 15px;border-radius:10px;z-index:30;display:none}
 @media(max-width:900px){.main{grid-template-columns:1fr}.cart{max-height:430px}.tickets{grid-template-columns:1fr 1fr}}
 @media(max-width:560px){.topbar{padding:0 12px}.topinfo{font-size:11px}.tables{grid-template-columns:repeat(4,1fr)}.mod-grid{grid-template-columns:1fr 1fr}.tickets{grid-template-columns:1fr}.payment{grid-template-columns:1fr}}
+#printArea{display:none}
+.receipt{width:280px;font-family:'Courier New',monospace;font-size:12px;padding:10px}
+.receipt h2{text-align:center;margin:0 0 2px;font-size:16px}
+.receipt .center{text-align:center}
+.receipt hr{border:none;border-top:1px dashed #000;margin:8px 0}
+.receipt .rline{display:flex;justify-content:space-between}
+.receipt .big{font-weight:700;font-size:14px}
+@media print{
+  body *{visibility:hidden}
+  #printArea,#printArea *{visibility:visible}
+  #printArea{display:block;position:absolute;left:0;top:0;width:100%}
+}
 </style>
 </head>
 <body>
@@ -69,6 +81,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
 <div id="appView" class="app" style="display:none">
 <header class="topbar"><div class="brand">☕ Café POS</div><div class="topinfo"><span id="userInfo"></span><span>·</span><span id="clock"></span><button class="logout" onclick="logout()">Logout</button></div></header>
 <div id="tabs" class="tabs"></div>
+<div id="shiftBar" style="display:none;align-items:center;gap:10px;padding:10px 14px;background:#fff9e6;border-bottom:1px solid #eee;font-size:13px;flex-wrap:wrap"></div>
 
 <section id="cashierView" class="main">
 <div class="panel">
@@ -104,6 +117,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
 <div id="reportCards" class="menu-grid"></div>
 <div class="panel" style="margin-top:14px;padding:14px;border-radius:10px"><b>Sales by Menu</b><div style="overflow:auto"><table id="salesReport" class="report-table" style="margin-top:10px"></table></div></div>
 <div class="panel" style="margin-top:14px;padding:14px;border-radius:10px"><b>Transaction Report</b><div style="overflow:auto"><table id="transactionReport" class="report-table" style="margin-top:10px"></table></div></div>
+<div id="deletedSection" class="panel" style="margin-top:14px;padding:14px;border-radius:10px;display:none"><b>🗑️ Transaksi Terhapus</b><p class="muted" style="margin:4px 0 0">Riwayat transaksi yang dihapus. Tidak dihitung ke penjualan, tapi tetap tercatat siapa & kenapa.</p><div style="overflow:auto"><table id="deletedReport" class="report-table" style="margin-top:10px"></table></div></div>
 </div></section>
 
 <section id="settingsView" class="station-screen"><div class="panel" style="padding:16px"><h2 style="margin:0">⚙️ Application Settings</h2><p class="muted">Master data, payment, synchronization, user, dan end-of-day.</p>
@@ -118,6 +132,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
 </div>
 
 <div id="modalRoot"></div><div id="toast" class="toast"></div>
+<div id="printArea"></div>
 
 <script>
 const menus=[
@@ -132,7 +147,7 @@ const menus=[
 {id:9,name:'Chicken Rice',cat:'FOOD',price:35000,emoji:'🍗',station:'KITCHEN',mods:null},
 {id:10,name:'French Fries',cat:'FOOD',price:18000,emoji:'🍟',station:'KITCHEN',mods:null}
 ];
-const tables=Array.from({length:12},(_,i)=>i+1);
+const tables=Array.from({length:100},(_,i)=>i+1);
 const users={
 gary:{name:'Gary',role:'CASHIER',tabs:['cashier','bar','kitchen','report']},
 head_cashier:{name:'Head Cashier',role:'HEAD_CASHIER',tabs:['cashier','bar','kitchen','report']},
@@ -145,6 +160,9 @@ const tabIcons={cashier:'🧾',bar:'🍹',kitchen:'🍳',stock:'📦',report:'�
 let activeCat='ALL', currentUser=null, editingOrderNo=null, editBackup=null;
 let state={customer:'',pax:1,table:null,mode:'DINE IN',items:[],orderNo:null,payment:null};
 let orders=JSON.parse(localStorage.getItem('cafePosOrders')||'[]');
+let auditLogs=JSON.parse(localStorage.getItem('cafePosAuditLogs')||'[]');
+let shifts=JSON.parse(localStorage.getItem('cafePosShifts')||'[]');
+let dayCloses=JSON.parse(localStorage.getItem('cafePosDayCloses')||'[]');
 let inventory=JSON.parse(localStorage.getItem('cafePosInventory')||'null')||[
 {id:'COFFEE_BEANS',name:'Coffee Beans',unit:'kg',stock:8.5,min:2,warehouse:'Main Warehouse'},
 {id:'MILK',name:'Fresh Milk',unit:'L',stock:24,min:5,warehouse:'Main Warehouse'},
@@ -171,6 +189,8 @@ const recipes={
 };
 const rupiah=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const attrSafe=s=>encodeURIComponent(s).replace(/'/g,'%27');
+const todayStr=()=>new Date().toISOString().slice(0,10);
 
 function availableQty(menu){
  const rec=recipes[menu.name]||[];
@@ -226,7 +246,7 @@ function openNewOrder(){
  if(editingOrderNo)cancelEdit();
  state={customer:'',pax:1,table:null,mode:'DINE IN',items:[],orderNo:null,payment:null};
  document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>New Order</h2><div class="modal-sub">1. Isi customer · 2. Pilih pax · 3. Pilih meja/mode · 4. Start Order · 5. Pilih menu</div>
- <label>Customer Name <span style="font-weight:400;color:#888">(optional)</span></label><input id="cust" type="text" placeholder="Contoh: Budi">
+ <label>Customer Name <span style="font-weight:400;color:#b42318">(wajib diisi)</span></label><input id="cust" type="text" placeholder="Contoh: Budi">
  <label>Number of Pax</label><div class="segment">${[1,2,3,4,5,6].map(n=>`<button id="pax${n}" class="${n===1?'selected':''}" onclick="setPax(${n})">${n}</button>`).join('')}</div>
  <label>Sales Mode</label><div class="segment"><button id="modeD" class="selected" onclick="setMode('DINE IN')">DINE IN</button><button id="modeT" onclick="setMode('TAKE AWAY')">TAKE AWAY</button></div>
  <div id="tableArea"><label>Table</label><div class="tables">${tables.map(n=>`<button id="tbl${n}" class="table-btn" onclick="setTable(${n})">T${String(n).padStart(2,'0')}</button>`).join('')}</div></div>
@@ -238,7 +258,9 @@ function setMode(m){state.mode=m;document.getElementById('modeD').classList.togg
 function setTable(n){state.table=n;tables.forEach(x=>document.getElementById('tbl'+x).classList.toggle('selected',x===n))}
 
 function startOrder(){
- state.customer=document.getElementById('cust').value.trim()||'Walk-in Customer';
+ const custName=document.getElementById('cust').value.trim();
+ if(!custName){toast('Nama customer wajib diisi');return}
+ state.customer=custName;
  if(state.mode==='DINE IN'&&!state.table){toast('Pilih table terlebih dahulu');return}
  state.orderNo='ORD-'+String(Date.now()).slice(-6);closeModal();renderAll();toast('Order '+state.orderNo+' dibuat');
 }
@@ -252,11 +274,15 @@ function selectMenu(id){
 
 function openItemOptions(m){
  const isDrink=m.mods==='drink';
+ const avail=availableQty(m), inCart=state.items.filter(i=>i.id===m.id).reduce((s,i)=>s+i.qty,0), maxQty=Math.max(1,avail-inCart);
  let sweet='Normal', ice='Normal';
 
  document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal">
    <h2>${m.emoji} ${esc(m.name)}</h2>
    <div class="modal-sub">${rupiah(m.price)} · ${isDrink?'MINUMAN':'MAKANAN'} · Station: ${m.station}</div>
+
+   <label>🔢 Jumlah (maks ${maxQty} sesuai stok)</label>
+   <input id="itemQty" type="number" min="1" max="${maxQty}" value="1" style="width:100%;padding:11px;border:1px solid #d8dadd;border-radius:9px">
 
    ${isDrink ? `
    <div class="mod-group">
@@ -296,44 +322,128 @@ function pickItemMod(el,type,value){
 function finishItemOptions(id){
  const m=menus.find(x=>x.id===id);
  const note=document.getElementById('itemNote').value.trim();
+ let qty=parseInt(document.getElementById('itemQty').value,10);
+ if(!qty||qty<1)qty=1;
 
  if(m.mods==='drink'){
-   addItem(m,{sweet:window._itemMod.sweet,ice:window._itemMod.ice},note);
+   addItem(m,{sweet:window._itemMod.sweet,ice:window._itemMod.ice},note,qty);
  }else{
-   addItem(m,{},note);
+   addItem(m,{},note,qty);
  }
 }
 
-function addItem(m,mods,note){
- const avail=availableQty(m),inCart=state.items.filter(i=>i.id===m.id).reduce((s,i)=>s+i.qty,0);if(inCart>=avail){toast('Stok '+m.name+' tidak cukup');closeModal();return}
+function addItem(m,mods,note,qty=1){
+ const avail=availableQty(m),inCart=state.items.filter(i=>i.id===m.id).reduce((s,i)=>s+i.qty,0);
+ if(inCart+qty>avail){toast('Stok '+m.name+' tidak cukup (sisa '+Math.max(0,avail-inCart)+')');closeModal();return}
  const key=JSON.stringify({id:m.id,mods,note}),existing=state.items.find(x=>x.key===key);
- if(existing)existing.qty++;else state.items.push({key,id:m.id,name:m.name,price:m.price,station:m.station,mods,note,qty:1});
- closeModal();renderAll();toast(m.name+' ditambahkan');
+ if(existing)existing.qty+=qty;else state.items.push({key,id:m.id,name:m.name,price:m.price,station:m.station,mods,note,qty});
+ closeModal();renderAll();toast(qty+'x '+m.name+' ditambahkan');
 }
 
-function changeQty(key,d){const i=state.items.find(x=>x.key===key);if(!i)return;if(d>0&&state.items.filter(x=>x.id===i.id).reduce((s,x)=>s+x.qty,0)>=availableQty(menus.find(m=>m.id===i.id))){toast('Melebihi stok warehouse');return}i.qty+=d;if(i.qty<=0)state.items=state.items.filter(x=>x.key!==key);renderAll()}
-function removeItem(key){state.items=state.items.filter(x=>x.key!==key);renderAll()}
+function changeQty(rawKey,d){const key=decodeURIComponent(rawKey);const i=state.items.find(x=>x.key===key);if(!i)return;if(d>0&&state.items.filter(x=>x.id===i.id).reduce((s,x)=>s+x.qty,0)>=availableQty(menus.find(m=>m.id===i.id))){toast('Melebihi stok warehouse');return}i.qty+=d;if(i.qty<=0)state.items=state.items.filter(x=>x.key!==key);renderAll()}
+function removeItem(rawKey){const key=decodeURIComponent(rawKey);state.items=state.items.filter(x=>x.key!==key);renderAll()}
 
 function renderCart(){
  const c=document.getElementById('cart');if(!state.items.length){c.innerHTML='<div class="empty">Belum ada item</div>';return}
- c.innerHTML=state.items.map(i=>`<div class="cart-item"><div class="row"><div><div class="item-name">${esc(i.name)}</div><div class="muted">${i.station} · ${rupiah(i.price)}${i.mods?.sweet?' · '+i.mods.sweet:''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div></div><b>${rupiah(i.price*i.qty)}</b></div><div class="qty"><button onclick="changeQty('${i.key}',-1)">−</button><span>${i.qty}</span><button onclick="changeQty('${i.key}',1)">+</button><button class="remove" onclick="removeItem('${i.key}')">Hapus</button></div></div>`).join('');
+ c.innerHTML=state.items.map(i=>`<div class="cart-item"><div class="row"><div><div class="item-name">${esc(i.name)}</div><div class="muted">${i.station} · ${rupiah(i.price)}${i.mods?.sweet?' · '+i.mods.sweet:''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div></div><b>${rupiah(i.price*i.qty)}</b></div><div class="qty"><button onclick="changeQty('${attrSafe(i.key)}',-1)">−</button><span>${i.qty}</span><button onclick="changeQty('${attrSafe(i.key)}',1)">+</button><button class="remove" onclick="removeItem('${attrSafe(i.key)}')">Hapus</button></div></div>`).join('');
 }
 
 function deleteOrder(orderNo){
  if(currentUser.role!=='ADMIN'&&currentUser.role!=='HEAD_CASHIER'){toast('Hanya Admin/Head Cashier yang dapat menghapus transaksi');return}
  const o=orders.find(x=>x.orderNo===orderNo);
- if(!o)return;
- if(!confirm('Hapus transaksi '+orderNo+'? Stok bahan akan dikembalikan.'))return;
+ if(!o||o.deleted)return;
+ if(!confirm('Hapus transaksi '+orderNo+'? Stok bahan akan dikembalikan. Data tetap tersimpan sebagai riwayat.'))return;
  const reason=prompt('Masukkan alasan penghapusan transaksi (minimal 5 karakter):');
  if(!reason||reason.trim().length<5){toast('Penghapusan dibatalkan. Alasan minimal 5 karakter wajib diisi.');return}
  reverseStock(o.items);
- orders=orders.filter(x=>x.orderNo!==orderNo);
+ o.deleted=true;
+ o.deletedBy=currentUser.name;
+ o.deletedReason=reason.trim();
+ o.deletedAt=new Date().toISOString();
+ (o.stationItems||[]).forEach(si=>si.status='READY');
  localStorage.setItem('cafePosOrders',JSON.stringify(orders));
- const auditLogs=JSON.parse(localStorage.getItem('cafePosAuditLogs')||'[]');
- auditLogs.unshift({action:'DELETE_ORDER',orderNo,actor:currentUser.name,reason:reason.trim(),total:o.total,deletedAt:new Date().toISOString()});
- localStorage.setItem('cafePosAuditLogs',JSON.stringify(auditLogs.slice(0,200)));
+ saveAuditLog({action:'DELETE_ORDER',orderNo,actor:currentUser.name,reason:reason.trim(),total:o.total});
  renderAll();
- toast('Transaksi '+orderNo+' berhasil dihapus');
+ toast('Transaksi '+orderNo+' dihapus dari penjualan (jejak tetap tersimpan)');
+}
+
+function openShiftFor(name){return shifts.find(s=>s.cashier===name&&!s.closedAt)}
+
+function renderShiftBar(){
+ const bar=document.getElementById('shiftBar');
+ if(!bar)return;
+ if(!['CASHIER','HEAD_CASHIER','ADMIN'].includes(currentUser.role)){bar.style.display='none';return}
+ bar.style.display='flex';
+ const shift=openShiftFor(currentUser.name);
+ const todayClosed=dayCloses.some(d=>d.date===todayStr());
+ bar.innerHTML=shift
+   ? `<span>🟢 Shift dibuka ${new Date(shift.openedAt).toLocaleTimeString('id-ID')}</span><button class="secondary" onclick="endOfShift()">Tutup Shift (End of Shift)</button><button class="secondary" onclick="endOfDay()">End of Day</button>`
+   : `<span>⚪ Belum ada shift dibuka${todayClosed?' · Hari ini sudah di-End of Day':''}</span><button class="secondary" onclick="openShift()">Buka Shift</button>`;
+}
+
+function openShift(){
+ if(openShiftFor(currentUser.name)){toast('Shift sudah dibuka');return}
+ shifts.unshift({id:'SH-'+Date.now(),cashier:currentUser.name,openedAt:new Date().toISOString(),closedAt:null});
+ localStorage.setItem('cafePosShifts',JSON.stringify(shifts));
+ renderShiftBar();
+ toast('Shift dibuka. Selamat bekerja, '+currentUser.name+'!');
+}
+
+function endOfShift(){
+ const shift=openShiftFor(currentUser.name);
+ if(!shift){toast('Tidak ada shift yang sedang terbuka');return}
+ if(!confirm('Tutup shift sekarang? Pastikan sudah tidak ada order yang sedang berjalan.'))return;
+ const shiftOrders=orders.filter(o=>o.shiftId===shift.id&&!o.deleted);
+ shift.closedAt=new Date().toISOString();
+ shift.totalSales=shiftOrders.reduce((s,o)=>s+o.total,0);
+ shift.orderCount=shiftOrders.length;
+ localStorage.setItem('cafePosShifts',JSON.stringify(shifts));
+ saveAuditLog({action:'END_OF_SHIFT',actor:currentUser.name,total:shift.totalSales,orderCount:shift.orderCount});
+ renderShiftBar();
+ printShiftSummary(shift,shiftOrders);
+ toast('Shift ditutup. Total penjualan '+rupiah(shift.totalSales));
+}
+
+function endOfDay(){
+ if(!['CASHIER','HEAD_CASHIER','ADMIN'].includes(currentUser.role))return;
+ if(dayCloses.some(d=>d.date===todayStr())){toast('Hari ini sudah di-End of Day');return}
+ if(!confirm('Tutup hari ini (End of Day)? Semua shift yang masih terbuka hari ini akan ikut ditutup, dan besok mulai dari 0 lagi.'))return;
+ const openToday=shifts.filter(s=>!s.closedAt&&s.openedAt.slice(0,10)===todayStr());
+ openToday.forEach(s=>{
+   const so=orders.filter(o=>o.shiftId===s.id&&!o.deleted);
+   s.closedAt=new Date().toISOString();
+   s.totalSales=so.reduce((a,o)=>a+o.total,0);
+   s.orderCount=so.length;
+ });
+ const todayOrders=orders.filter(o=>!o.deleted&&(o.createdAt||'').slice(0,10)===todayStr());
+ const summary={date:todayStr(),closedBy:currentUser.name,closedAt:new Date().toISOString(),totalSales:todayOrders.reduce((s,o)=>s+o.total,0),orderCount:todayOrders.length,cashiers:[...new Set(todayOrders.map(o=>o.cashier))]};
+ dayCloses.unshift(summary);
+ localStorage.setItem('cafePosShifts',JSON.stringify(shifts));
+ localStorage.setItem('cafePosDayCloses',JSON.stringify(dayCloses));
+ saveAuditLog({action:'END_OF_DAY',actor:currentUser.name,total:summary.totalSales,orderCount:summary.orderCount});
+ renderShiftBar();
+ printDaySummary(summary);
+ toast('Hari ini ditutup (End of Day). Besok otomatis mulai dari 0.');
+}
+
+function saveAuditLog(entry){
+ auditLogs.unshift({...entry,at:new Date().toISOString()});
+ auditLogs=auditLogs.slice(0,300);
+ localStorage.setItem('cafePosAuditLogs',JSON.stringify(auditLogs));
+}
+
+function viewDeletedOrder(orderNo){
+ const o=orders.find(x=>x.orderNo===orderNo);
+ if(!o)return;
+ document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal">
+  <h2>🗑️ ${o.orderNo} (Dihapus)</h2>
+  <div class="modal-sub">Dihapus oleh <b>${esc(o.deletedBy)}</b> pada ${new Date(o.deletedAt).toLocaleString('id-ID')}<br>Alasan: ${esc(o.deletedReason)}</div>
+  <div style="border:1px solid #eee;border-radius:10px;padding:10px">
+  ${o.items.map(i=>`<div class="cart-item"><div class="row"><div><div class="item-name">${esc(i.name)}</div><div class="muted">${i.station} · ${rupiah(i.price)} x${i.qty}</div></div><b>${rupiah(i.price*i.qty)}</b></div></div>`).join('')}
+  </div>
+  <div class="sumrow total" style="margin-top:10px"><span>Total (tidak dihitung penjualan)</span><span>${rupiah(o.total)}</span></div>
+  <div class="actions"><button class="cancel" onclick="closeModal()">Tutup</button></div>
+ </div></div>`;
 }
 
 function renderOrderInfo(){
@@ -345,7 +455,9 @@ function renderOrderInfo(){
 }
 
 function openPayment(){
- if(!state.items.length)return;const total=state.items.reduce((s,i)=>s+i.price*i.qty,0),pay=state.payment||'CASH';
+ if(!state.items.length)return;
+ if(!editingOrderNo&&['CASHIER','HEAD_CASHIER'].includes(currentUser.role)&&!openShiftFor(currentUser.name)){toast('Buka shift terlebih dahulu sebelum menerima order');return}
+ const total=state.items.reduce((s,i)=>s+i.price*i.qty,0),pay=state.payment||'CASH';
  document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>${editingOrderNo?'Edit Receipt':'Payment'}</h2><div class="modal-sub">Total pembayaran: <b>${rupiah(total)}</b></div>
  <div class="payment">${['CASH','CARD','QRIS / BANK'].map(x=>`<button id="pay${x.replace(/\W/g,'')}" class="pay ${x===pay?'selected':''}" onclick="pickPayment('${x}')">${x}</button>`).join('')}</div>
  <div class="actions"><button class="cancel" onclick="closeModal()">Cancel</button><button class="primary" style="margin:0" onclick="completePayment()">${editingOrderNo?'Simpan Receipt':'Confirm Payment'}</button></div></div></div>`;
@@ -356,7 +468,8 @@ function pickPayment(p){state.payment=p;document.querySelectorAll('.pay').forEac
 
 function completePayment(){
  const total=state.items.reduce((s,i)=>s+i.price*i.qty,0);
- const record={...JSON.parse(JSON.stringify(state)),cashier:currentUser.name,total,status:'PROCESSING',createdAt:editingOrderNo?(orders.find(o=>o.orderNo===editingOrderNo)?.createdAt||new Date().toISOString()):new Date().toISOString(),stationItems:state.items.map(i=>({...i,status:'NEW'}))};
+ const shift=openShiftFor(currentUser.name);
+ const record={...JSON.parse(JSON.stringify(state)),cashier:currentUser.name,shiftId:shift?shift.id:null,total,status:'PROCESSING',createdAt:editingOrderNo?(orders.find(o=>o.orderNo===editingOrderNo)?.createdAt||new Date().toISOString()):new Date().toISOString(),stationItems:state.items.map(i=>({...i,status:'NEW'}))};
  if(editingOrderNo){
    orders.unshift(record);
    consumeStock(state.items);
@@ -373,6 +486,13 @@ function completePayment(){
  closeModal();
  renderAll();
  renderStations();
+ autoPrintOrder(record);
+}
+
+function autoPrintOrder(record){
+ printReceipt(record.orderNo);
+ if(record.stationItems.some(i=>i.station==='BAR'))printStationTicket(record.orderNo,'BAR');
+ if(record.stationItems.some(i=>i.station==='KITCHEN'))printStationTicket(record.orderNo,'KITCHEN');
 }
 
 function startEditOrder(orderNo){
@@ -392,15 +512,89 @@ function cancelEdit(){
 
 function reverseStock(items){items.forEach(item=>(recipes[item.name]||[]).forEach(([id,qty])=>{const ing=inventory.find(x=>x.id===id);if(ing)ing.stock=+(ing.stock+qty*item.qty).toFixed(3)}));saveInventory()}
 
-function stationTickets(station){return orders.flatMap(o=>o.stationItems.filter(i=>i.station===station).length?[{o,items:o.stationItems.filter(i=>i.station===station)}]:[])}
+function stationTickets(station){return orders.filter(o=>!o.deleted).flatMap(o=>o.stationItems.filter(i=>i.station===station).length?[{o,items:o.stationItems.filter(i=>i.station===station)}]:[])}
 
 function renderStation(station,elId){
  const data=stationTickets(station),el=document.getElementById(elId);
  if(!data.length){el.innerHTML='<div class="empty">Belum ada pesanan '+station.toLowerCase()+'</div>';return}
- el.innerHTML=data.map(({o,items})=>`<div class="ticket"><div class="row"><div><h3>${o.orderNo}</h3><small>${esc(o.customer)} · ${o.cashier||'-'} · ${o.mode}${o.table?' · T'+String(o.table).padStart(2,'0'):''}</small></div><span class="status">${items.every(i=>i.status==='READY')?'READY':'IN PROGRESS'}</span></div>${items.map(i=>`<div class="ticket-item"><b>${i.qty}x ${esc(i.name)}</b><div class="muted">${i.mods?.sweet||''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div><span class="status ${i.status}">${i.status}</span>${i.status!=='READY'?`<button onclick="advanceItem('${o.orderNo}','${i.key}')">${i.status==='NEW'?'Mulai':'Tandai Ready'}</button>`:''}</div>`).join('')}</div>`).join('');
+ el.innerHTML=data.map(({o,items})=>`<div class="ticket"><div class="row"><div><h3>${o.orderNo}</h3><small>${esc(o.customer)} · ${o.cashier||'-'} · ${o.mode}${o.table?' · T'+String(o.table).padStart(2,'0'):''}</small></div><span class="status">${items.every(i=>i.status==='READY')?'READY':'IN PROGRESS'}</span></div>${items.map(i=>`<div class="ticket-item"><b>${i.qty}x ${esc(i.name)}</b><div class="muted">${i.mods?.sweet||''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div><span class="status ${i.status}">${i.status}</span>${i.status!=='READY'?`<button onclick="advanceItem('${o.orderNo}','${attrSafe(i.key)}')">${i.status==='NEW'?'Mulai':'Tandai Ready'}</button>`:''}</div>`).join('')}</div>`).join('');
 }
 
-function advanceItem(orderNo,key){const o=orders.find(x=>x.orderNo===orderNo);if(!o)return;const i=o.stationItems.find(x=>x.key===key);if(!i)return;i.status=i.status==='NEW'?'PREPARING':'READY';localStorage.setItem('cafePosOrders',JSON.stringify(orders));renderStations();toast(i.name+' → '+i.status)}
+function advanceItem(orderNo,rawKey){const key=decodeURIComponent(rawKey);const o=orders.find(x=>x.orderNo===orderNo);if(!o)return;const i=o.stationItems.find(x=>x.key===key);if(!i)return;i.status=i.status==='NEW'?'PREPARING':'READY';localStorage.setItem('cafePosOrders',JSON.stringify(orders));renderStations();toast(i.name+' → '+i.status)}
+
+function doPrint(html){
+ document.getElementById('printArea').innerHTML=html;
+ window.print();
+}
+
+function printReceipt(orderNo){
+ const o=orders.find(x=>x.orderNo===orderNo);
+ if(!o)return;
+ doPrint(`<div class="receipt">
+  <h2>☕ Café POS</h2>
+  <div class="center">Jl. Contoh No.1<br>${new Date(o.createdAt).toLocaleString('id-ID')}</div>
+  <hr>
+  <div>Order: <b>${o.orderNo}</b></div>
+  <div>Kasir: ${esc(o.cashier)}</div>
+  <div>${esc(o.customer)} · ${o.mode}${o.table?' · T'+String(o.table).padStart(2,'0'):''}</div>
+  <hr>
+  ${o.items.map(i=>`<div class="rline"><span>${i.qty}x ${esc(i.name)}</span><span>${rupiah(i.price*i.qty)}</span></div>${i.mods?.sweet||i.mods?.ice||i.note?`<div style="font-size:10px;color:#555">${i.mods?.sweet||''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div>`:''}`).join('')}
+  <hr>
+  <div class="rline big"><span>TOTAL</span><span>${rupiah(o.total)}</span></div>
+  <div class="rline"><span>Payment</span><span>${o.payment||'-'}</span></div>
+  <hr>
+  <div class="center">Terima kasih atas kunjungan Anda!</div>
+ </div>`);
+}
+
+function printStationTicket(orderNo,station){
+ const o=orders.find(x=>x.orderNo===orderNo);
+ if(!o)return;
+ const items=o.stationItems.filter(i=>i.station===station);
+ if(!items.length){toast('Tidak ada item '+station+' di order ini');return}
+ doPrint(`<div class="receipt">
+  <h2>${station==='BAR'?'🍹 BAR':'🍳 KITCHEN'}</h2>
+  <div class="center">${o.orderNo} · ${new Date(o.createdAt).toLocaleTimeString('id-ID')}</div>
+  <div class="center">${esc(o.customer)} · ${o.mode}${o.table?' · T'+String(o.table).padStart(2,'0'):''}</div>
+  <hr>
+  ${items.map(i=>`<div class="rline big"><span>${i.qty}x ${esc(i.name)}</span></div>${i.mods?.sweet||i.mods?.ice||i.note?`<div style="font-size:11px">${i.mods?.sweet||''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div>`:''}<hr>`).join('')}
+ </div>`);
+}
+
+function printShiftSummary(shift,shiftOrders){
+ doPrint(`<div class="receipt">
+  <h2>☕ Café POS</h2>
+  <div class="center">LAPORAN END OF SHIFT</div>
+  <hr>
+  <div>Kasir: <b>${esc(shift.cashier)}</b></div>
+  <div>Buka: ${new Date(shift.openedAt).toLocaleString('id-ID')}</div>
+  <div>Tutup: ${new Date(shift.closedAt).toLocaleString('id-ID')}</div>
+  <hr>
+  <div class="rline"><span>Jumlah Order</span><span>${shift.orderCount}</span></div>
+  <div class="rline big"><span>Total Penjualan</span><span>${rupiah(shift.totalSales)}</span></div>
+  <hr>
+  ${['CASH','CARD','QRIS / BANK'].map(p=>{const s=shiftOrders.filter(o=>o.payment===p).reduce((a,o)=>a+o.total,0);return `<div class="rline"><span>${p}</span><span>${rupiah(s)}</span></div>`}).join('')}
+  <hr>
+  <div class="center">Ditutup oleh ${esc(shift.cashier)}</div>
+ </div>`);
+}
+
+function printDaySummary(summary){
+ doPrint(`<div class="receipt">
+  <h2>☕ Café POS</h2>
+  <div class="center">LAPORAN END OF DAY</div>
+  <hr>
+  <div>Tanggal: <b>${summary.date}</b></div>
+  <div>Ditutup oleh: ${esc(summary.closedBy)}</div>
+  <div>Waktu tutup: ${new Date(summary.closedAt).toLocaleString('id-ID')}</div>
+  <hr>
+  <div class="rline"><span>Jumlah Order</span><span>${summary.orderCount}</span></div>
+  <div class="rline big"><span>Total Penjualan</span><span>${rupiah(summary.totalSales)}</span></div>
+  <div style="margin-top:6px">Kasir bertugas: ${summary.cashiers.map(esc).join(', ')||'-'}</div>
+  <hr>
+  <div class="center">Hari berikutnya otomatis mulai dari 0</div>
+ </div>`);
+}
 
 function saveInventory(){localStorage.setItem('cafePosInventory',JSON.stringify(inventory))}
 
@@ -425,8 +619,9 @@ function syncWarehouse(){
 
 function renderHistory(){
  const h=document.getElementById('history');
- if(!orders.length){h.innerHTML='<div class="empty">Belum ada transaksi</div>';return}
- h.innerHTML='<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr><th>Order</th><th>Cust</th><th>Total</th><th>Pay</th><th>Aksi</th></tr></thead><tbody>'+orders.slice(0,10).map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${esc(o.customer)}</td><td>${rupiah(o.total)}</td><td>${o.payment||'-'}</td><td><button onclick="startEditOrder('${o.orderNo}')">Edit</button></td></tr>`).join('')+'</tbody></table></div>';
+ const active=orders.filter(o=>!o.deleted);
+ if(!active.length){h.innerHTML='<div class="empty">Belum ada transaksi</div>';return}
+ h.innerHTML='<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr><th>Order</th><th>Cust</th><th>Total</th><th>Pay</th><th>Aksi</th></tr></thead><tbody>'+active.slice(0,10).map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${esc(o.customer)}</td><td>${rupiah(o.total)}</td><td>${o.payment||'-'}</td><td><button onclick="startEditOrder('${o.orderNo}')">Edit</button> <button onclick="printReceipt('${o.orderNo}')">🖨️</button></td></tr>`).join('')+'</tbody></table></div>';
 }
 
 function renderStations(){
@@ -439,18 +634,28 @@ function renderStations(){
 }
 
 function renderReport(){
- const cashiers=['ALL',...new Set(orders.map(o=>o.cashier).filter(Boolean))];
+ const isOwnScope=currentUser.role==='CASHIER';
+ const base=orders.filter(o=>!o.deleted);
+ const cashiers=['ALL',...new Set(base.map(o=>o.cashier).filter(Boolean))];
  const selC=document.getElementById('reportCashier');
- const curC=selC.value||'ALL';
- selC.innerHTML=cashiers.map(c=>`<option value="${c}" ${c===curC?'selected':''}>${c==='ALL'?'Semua Kasir':'Kasir: '+c}</option>`).join('');
+
+ if(isOwnScope){
+   selC.innerHTML=`<option value="${esc(currentUser.name)}">Kasir: ${esc(currentUser.name)} (Anda)</option>`;
+   selC.disabled=true;
+ }else{
+   selC.disabled=false;
+   const curC=selC.value||'ALL';
+   selC.innerHTML=cashiers.map(c=>`<option value="${c}" ${c===curC?'selected':''}>${c==='ALL'?'Semua Kasir':'Kasir: '+c}</option>`).join('');
+ }
 
  const pFilter=document.getElementById('reportPayment').value;
- const cFilter=selC.value;
+ const cFilter=isOwnScope?currentUser.name:selC.value;
 
- const filtered=orders.filter(o=>{
+ const filtered=base.filter(o=>{
    const pOk=pFilter==='ALL'||o.payment===pFilter;
    const cOk=cFilter==='ALL'||o.cashier===cFilter;
-   return pOk&&cOk;
+   const dOk=!isOwnScope||(o.createdAt||'').slice(0,10)===todayStr();
+   return pOk&&cOk&&dOk;
  });
 
  const totalRev=filtered.reduce((s,o)=>s+o.total,0);
@@ -473,10 +678,19 @@ function renderReport(){
  document.getElementById('salesReport').innerHTML='<tr><th>Item</th><th>Qty Sold</th><th>Total Revenue</th></tr>'+(salesArr.length?salesArr.map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${v.qty}</td><td>${rupiah(v.rev)}</td></tr>`).join(''):'<tr><td colspan="3" class="muted">Tidak ada data</td></tr>');
 
  const canDelete=currentUser.role==='ADMIN'||currentUser.role==='HEAD_CASHIER';
-document.getElementById('transactionReport').innerHTML='<tr><th>Order No</th><th>Time</th><th>Cashier</th><th>Mode</th><th>Payment</th><th>Total</th>'+(canDelete?'<th>Aksi</th>':'')+'</tr>'+(filtered.length?filtered.map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${new Date(o.createdAt).toLocaleTimeString('id-ID')}</td><td>${o.cashier||'-'}</td><td>${o.mode}</td><td>${o.payment||'-'}</td><td>${rupiah(o.total)}</td>${canDelete?`<td><button onclick="deleteOrder('${o.orderNo}')">Hapus</button></td>`:''}</tr>`).join(''):'<tr><td colspan="'+(canDelete?7:6)+'" class="muted">Tidak ada data</td></tr>');
+document.getElementById('transactionReport').innerHTML='<tr><th>Order No</th><th>Time</th><th>Cashier</th><th>Mode</th><th>Payment</th><th>Total</th>'+(canDelete?'<th>Aksi</th>':'')+'</tr>'+(filtered.length?filtered.map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${new Date(o.createdAt).toLocaleTimeString('id-ID')}</td><td>${o.cashier||'-'}</td><td>${o.mode}</td><td>${o.payment||'-'}</td><td>${rupiah(o.total)}</td>${canDelete?`<td><button onclick="deleteOrder('${o.orderNo}')">Hapus</button> <button onclick="printReceipt('${o.orderNo}')">🖨️</button></td>`:''}</tr>`).join(''):'<tr><td colspan="'+(canDelete?7:6)+'" class="muted">Tidak ada data</td></tr>');
+
+ const delSection=document.getElementById('deletedSection');
+ if(!canDelete){delSection.style.display='none';}
+ else{
+   delSection.style.display='block';
+   const deleted=orders.filter(o=>o.deleted);
+   document.getElementById('deletedReport').innerHTML='<tr><th>Order No</th><th>Dihapus Oleh</th><th>Alasan</th><th>Waktu Hapus</th><th>Total</th><th>Aksi</th></tr>'+(deleted.length?deleted.map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${esc(o.deletedBy)}</td><td>${esc(o.deletedReason)}</td><td>${new Date(o.deletedAt).toLocaleString('id-ID')}</td><td>${rupiah(o.total)}</td><td><button onclick="viewDeletedOrder('${o.orderNo}')">Lihat Detail</button></td></tr>`).join(''):'<tr><td colspan="6" class="muted">Belum ada transaksi terhapus</td></tr>');
+ }
 }
 
 function renderAll(){
+ renderShiftBar();
  renderMenu();
  renderCart();
  renderOrderInfo();
