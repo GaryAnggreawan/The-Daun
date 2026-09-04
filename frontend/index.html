@@ -49,6 +49,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
     <label>User</label>
     <select id="loginUser">
       <option value="gary">Gary — Cashier</option>
+      <option value="head_cashier">Head Cashier — Head Cashier</option>
       <option value="warehouse">Warehouse — Warehouse</option>
       <option value="admin">Admin — Admin</option>
     </select>
@@ -58,6 +59,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
     <div class="muted" style="margin-top:14px">Demo password semua user: <b>1234</b></div>
     <div class="demo-users">
       <button class="demo-user" onclick="quickLogin('gary')"><b>Gary</b> · Kasir → Kasir, Bar, Kitchen, Reporting</button>
+      <button class="demo-user" onclick="quickLogin('head_cashier')"><b>Head Cashier</b> · Head Cashier → Kasir, Bar, Kitchen, Reporting</button>
       <button class="demo-user" onclick="quickLogin('warehouse')"><b>Warehouse</b> · Warehouse → Stock</button>
       <button class="demo-user" onclick="quickLogin('admin')"><b>Admin</b> · Admin → Semua halaman</button>
     </div>
@@ -73,7 +75,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
 <div class="toolbar">
 <input id="search" class="search" placeholder="Cari menu..." oninput="renderMenu()">
 <button class="cat active" onclick="setCat('ALL',this)">Semua</button><button class="cat" onclick="setCat('COFFEE',this)">Coffee</button><button class="cat" onclick="setCat('NON COFFEE',this)">Non Coffee</button><button class="cat" onclick="setCat('FOOD',this)">Food</button>
-<button class="secondary" onclick="openNewOrder()">+ New Order</button>
+<button class="secondary" style="font-weight:800" onclick="openNewOrder()">＋ New Order</button>
 </div>
 <div class="content"><div id="menuGrid" class="menu-grid"></div></div>
 <div class="history"><b>Transaksi Kasir</b><div id="history"></div></div>
@@ -133,6 +135,7 @@ const menus=[
 const tables=Array.from({length:12},(_,i)=>i+1);
 const users={
 gary:{name:'Gary',role:'CASHIER',tabs:['cashier','bar','kitchen','report']},
+head_cashier:{name:'Head Cashier',role:'HEAD_CASHIER',tabs:['cashier','bar','kitchen','report']},
 warehouse:{name:'Warehouse',role:'WAREHOUSE',tabs:['stock']},
 admin:{name:'Admin',role:'ADMIN',tabs:['cashier','bar','kitchen','stock','report','settings']}
 };
@@ -168,6 +171,7 @@ const recipes={
 };
 const rupiah=n=>'Rp'+Number(n||0).toLocaleString('id-ID');
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+
 function availableQty(menu){
  const rec=recipes[menu.name]||[];
  if(!rec.length)return 999;
@@ -175,19 +179,29 @@ function availableQty(menu){
    const ing=inventory.find(x=>x.id===id); return ing?ing.stock/need:0;
  }))));
 }
+
 function login(){
  const key=document.getElementById('loginUser').value;
  if(document.getElementById('loginPassword').value!=='1234'){toast('Password demo: 1234');return}
  currentUser=users[key]; sessionStorage.setItem('cafePosUser',key); showApp();
 }
+
 function quickLogin(key){document.getElementById('loginUser').value=key;login()}
 function logout(){currentUser=null;sessionStorage.removeItem('cafePosUser');document.getElementById('appView').style.display='none';document.getElementById('loginView').style.display='flex'}
+
 function showApp(){
  document.getElementById('loginView').style.display='none';document.getElementById('appView').style.display='block';
  document.getElementById('userInfo').textContent=currentUser.name+' · '+currentUser.role;
  document.getElementById('tabs').innerHTML=currentUser.tabs.map(v=>`<button class="tab" onclick="showView('${v}',this)">${tabIcons[v]} ${tabNames[v]}${v==='bar'?'<span id="barCount"></span>':''}${v==='kitchen'?'<span id="kitchenCount"></span>':''}</button>`).join('');
  const first=document.querySelector('#tabs .tab'); if(first)showView(currentUser.tabs[0],first);
+ updateClock(); setInterval(updateClock,1000);
 }
+
+function updateClock(){
+ const el=document.getElementById('clock');
+ if(el) el.textContent=new Date().toLocaleTimeString('id-ID');
+}
+
 function showView(view,el){
  if(!currentUser.tabs.includes(view)){toast('Role ini tidak memiliki akses ke halaman tersebut');return}
  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));if(el)el.classList.add('active');
@@ -195,7 +209,9 @@ function showView(view,el){
  if(view==='cashier')document.getElementById('cashierView').style.display='grid';else document.getElementById(view+'View').style.display='block';
  renderAll();
 }
+
 function setCat(cat,el){activeCat=cat;document.querySelectorAll('.cat').forEach(x=>x.classList.remove('active'));el.classList.add('active');renderMenu()}
+
 function renderMenu(){
  const q=(document.getElementById('search')?.value||'').toLowerCase();
  const list=menus.filter(m=>(activeCat==='ALL'||m.cat===activeCat)&&m.name.toLowerCase().includes(q));
@@ -205,135 +221,87 @@ function renderMenu(){
    return `<button class="menu-card" ${ok?'':'disabled'} onclick="selectMenu(${m.id})"><div class="menu-img">${m.emoji}</div><div class="menu-name">${m.name}</div><div class="price">${rupiah(m.price)}</div><span class="station">${m.station}</span><span class="availability ${ok?(left<=3?'limited':'available'):'unavailable'}">${ok?'Sisa '+left+' menu':'Habis'}</span></button>`
  }).join('');
 }
+
 function openNewOrder(){
  if(editingOrderNo)cancelEdit();
  state={customer:'',pax:1,table:null,mode:'DINE IN',items:[],orderNo:null,payment:null};
- document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>New Order</h2><div class="modal-sub">Masukkan customer, pax, meja, lalu mulai order.</div>
+ document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>New Order</h2><div class="modal-sub">1. Isi customer · 2. Pilih pax · 3. Pilih meja/mode · 4. Start Order · 5. Pilih menu</div>
  <label>Customer Name <span style="font-weight:400;color:#888">(optional)</span></label><input id="cust" type="text" placeholder="Contoh: Budi">
  <label>Number of Pax</label><div class="segment">${[1,2,3,4,5,6].map(n=>`<button id="pax${n}" class="${n===1?'selected':''}" onclick="setPax(${n})">${n}</button>`).join('')}</div>
  <label>Sales Mode</label><div class="segment"><button id="modeD" class="selected" onclick="setMode('DINE IN')">DINE IN</button><button id="modeT" onclick="setMode('TAKE AWAY')">TAKE AWAY</button></div>
  <div id="tableArea"><label>Table</label><div class="tables">${tables.map(n=>`<button id="tbl${n}" class="table-btn" onclick="setTable(${n})">T${String(n).padStart(2,'0')}</button>`).join('')}</div></div>
  <div class="actions"><button class="cancel" onclick="closeModal()">Cancel</button><button class="primary" style="margin:0" onclick="startOrder()">Start Order</button></div></div></div>`;
 }
+
 function setPax(n){state.pax=n;[1,2,3,4,5,6].forEach(x=>document.getElementById('pax'+x).classList.toggle('selected',x===n))}
 function setMode(m){state.mode=m;document.getElementById('modeD').classList.toggle('selected',m==='DINE IN');document.getElementById('modeT').classList.toggle('selected',m==='TAKE AWAY');document.getElementById('tableArea').style.display=m==='DINE IN'?'block':'none'}
 function setTable(n){state.table=n;tables.forEach(x=>document.getElementById('tbl'+x).classList.toggle('selected',x===n))}
+
 function startOrder(){
  state.customer=document.getElementById('cust').value.trim()||'Walk-in Customer';
  if(state.mode==='DINE IN'&&!state.table){toast('Pilih table terlebih dahulu');return}
  state.orderNo='ORD-'+String(Date.now()).slice(-6);closeModal();renderAll();toast('Order '+state.orderNo+' dibuat');
 }
+
 function selectMenu(id){
-  if(!state.orderNo){
-    toast('Klik + New Order terlebih dahulu');
-    return;
-  }
-
-  const m=menus.find(x=>x.id===id);
-  if(!m)return;
-
-  const avail=availableQty(m);
-  const inCart=state.items.filter(i=>i.id===m.id).reduce((s,i)=>s+i.qty,0);
-
-  if(inCart>=avail){
-    toast(m.name+' sudah mencapai stok warehouse');
-    return;
-  }
-
-  // SETIAP menu membuka popup.
-  // Drink  : Sweetness + Ice Level + Notes
-  // Food   : Notes saja
-  openItemPopup(m);
+ if(!state.orderNo){toast('Klik + New Order terlebih dahulu');return}
+ const m=menus.find(x=>x.id===id), avail=availableQty(m), inCart=state.items.filter(i=>i.id===m.id).reduce((s,i)=>s+i.qty,0);
+ if(inCart>=avail){toast(m.name+' sudah mencapai stok warehouse');return}
+ openItemOptions(m);
 }
 
-function openItemPopup(m){
-  const isDrink=m.mods==='drink';
-  let sweet='Normal';
-  let ice='Normal';
+function openItemOptions(m){
+ const isDrink=m.mods==='drink';
+ let sweet='Normal', ice='Normal';
 
-  document.getElementById('modalRoot').innerHTML=`
-    <div class="overlay">
-      <div class="modal">
-        <h2>${m.emoji} ${esc(m.name)}</h2>
-        <div class="modal-sub">
-          ${rupiah(m.price)} · ${isDrink?'MINUMAN':'MAKANAN'} · Station: ${m.station}
-        </div>
+ document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal">
+   <h2>${m.emoji} ${esc(m.name)}</h2>
+   <div class="modal-sub">${rupiah(m.price)} · ${isDrink?'MINUMAN':'MAKANAN'} · Station: ${m.station}</div>
 
-        ${isDrink ? `
-          <div class="mod-group">
-            <h3>🍬 Sweetness</h3>
-            <div class="mod-grid">
-              ${['Less Sweet','Normal','No Sweet'].map(x=>`
-                <button type="button"
-                  class="mod-option ${x==='Normal'?'selected':''}"
-                  onclick="selectItemOption(this,'sweet','${x}')">
-                  ${x}
-                </button>
-              `).join('')}
-            </div>
-          </div>
+   ${isDrink ? `
+   <div class="mod-group">
+     <h3>🍬 Sweetness</h3>
+     <div class="mod-grid">
+       ${['Less Sweet','Normal','No Sweet'].map(x=>`<button class="mod-option ${x==='Normal'?'selected':''}" onclick="pickItemMod(this,'sweet','${x}')">${x}</button>`).join('')}
+     </div>
+   </div>
 
-          <div class="mod-group">
-            <h3>🧊 Ice Level</h3>
-            <div class="mod-grid">
-              ${['Less Ice','Normal','No Ice'].map(x=>`
-                <button type="button"
-                  class="mod-option ${x==='Normal'?'selected':''}"
-                  onclick="selectItemOption(this,'ice','${x}')">
-                  ${x}
-                </button>
-              `).join('')}
-            </div>
-          </div>
-        ` : ''}
+   <div class="mod-group">
+     <h3>🧊 Ice Level</h3>
+     <div class="mod-grid">
+       ${['Less Ice','Normal','No Ice'].map(x=>`<button class="mod-option ${x==='Normal'?'selected':''}" onclick="pickItemMod(this,'ice','${x}')">${x}</button>`).join('')}
+     </div>
+   </div>` : ''}
 
-        <div class="note">
-          <label>📝 Notes</label>
-          <input id="itemNote" type="text"
-            placeholder="${isDrink
-              ? 'Contoh: tanpa sedotan'
-              : 'Contoh: tanpa bawang, sambal dipisah'}">
-        </div>
+   <div class="note">
+     <label>📝 Notes ${isDrink?'':'(untuk makanan)'}</label>
+     <input id="itemNote" type="text" placeholder="${isDrink?'Contoh: tanpa sedotan':'Contoh: sambal dipisah, tanpa bawang'}">
+   </div>
 
-        <div class="actions">
-          <button type="button" class="cancel" onclick="closeModal()">Cancel</button>
-          <button type="button" class="primary" style="margin:0"
-            onclick="confirmItemPopup(${m.id})">
-            Add to Order
-          </button>
-        </div>
-      </div>
-    </div>`;
+   <div class="actions">
+     <button class="cancel" onclick="closeModal()">Cancel</button>
+     <button class="primary" style="margin:0" onclick="finishItemOptions(${m.id})">Add to Order</button>
+   </div>
+ </div></div>`;
 
-  window._itemPopup={sweet:sweet,ice:ice,isDrink:isDrink};
+ window._itemMod={sweet,ice,isDrink};
 }
 
-function selectItemOption(el,type,value){
-  if(!window._itemPopup)return;
-
-  window._itemPopup[type]=value;
-
-  el.parentElement
-    .querySelectorAll('.mod-option')
-    .forEach(x=>x.classList.remove('selected'));
-
-  el.classList.add('selected');
+function pickItemMod(el,type,value){
+ window._itemMod[type]=value;
+ el.parentElement.querySelectorAll('.mod-option').forEach(x=>x.classList.remove('selected'));
+ el.classList.add('selected');
 }
 
-function confirmItemPopup(id){
-  const m=menus.find(x=>x.id===id);
-  if(!m)return;
+function finishItemOptions(id){
+ const m=menus.find(x=>x.id===id);
+ const note=document.getElementById('itemNote').value.trim();
 
-  const note=(document.getElementById('itemNote')?.value||'').trim();
-
-  if(m.mods==='drink'){
-    addItem(m,{
-      sweet:window._itemPopup?.sweet||'Normal',
-      ice:window._itemPopup?.ice||'Normal'
-    },note);
-  }else{
-    addItem(m,{},note);
-  }
+ if(m.mods==='drink'){
+   addItem(m,{sweet:window._itemMod.sweet,ice:window._itemMod.ice},note);
+ }else{
+   addItem(m,{},note);
+ }
 }
 
 function addItem(m,mods,note){
@@ -342,12 +310,32 @@ function addItem(m,mods,note){
  if(existing)existing.qty++;else state.items.push({key,id:m.id,name:m.name,price:m.price,station:m.station,mods,note,qty:1});
  closeModal();renderAll();toast(m.name+' ditambahkan');
 }
+
 function changeQty(key,d){const i=state.items.find(x=>x.key===key);if(!i)return;if(d>0&&state.items.filter(x=>x.id===i.id).reduce((s,x)=>s+x.qty,0)>=availableQty(menus.find(m=>m.id===i.id))){toast('Melebihi stok warehouse');return}i.qty+=d;if(i.qty<=0)state.items=state.items.filter(x=>x.key!==key);renderAll()}
 function removeItem(key){state.items=state.items.filter(x=>x.key!==key);renderAll()}
+
 function renderCart(){
  const c=document.getElementById('cart');if(!state.items.length){c.innerHTML='<div class="empty">Belum ada item</div>';return}
  c.innerHTML=state.items.map(i=>`<div class="cart-item"><div class="row"><div><div class="item-name">${esc(i.name)}</div><div class="muted">${i.station} · ${rupiah(i.price)}${i.mods?.sweet?' · '+i.mods.sweet:''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div></div><b>${rupiah(i.price*i.qty)}</b></div><div class="qty"><button onclick="changeQty('${i.key}',-1)">−</button><span>${i.qty}</span><button onclick="changeQty('${i.key}',1)">+</button><button class="remove" onclick="removeItem('${i.key}')">Hapus</button></div></div>`).join('');
 }
+
+function deleteOrder(orderNo){
+ if(currentUser.role!=='ADMIN'&&currentUser.role!=='HEAD_CASHIER'){toast('Hanya Admin/Head Cashier yang dapat menghapus transaksi');return}
+ const o=orders.find(x=>x.orderNo===orderNo);
+ if(!o)return;
+ if(!confirm('Hapus transaksi '+orderNo+'? Stok bahan akan dikembalikan.'))return;
+ const reason=prompt('Masukkan alasan penghapusan transaksi (minimal 5 karakter):');
+ if(!reason||reason.trim().length<5){toast('Penghapusan dibatalkan. Alasan minimal 5 karakter wajib diisi.');return}
+ reverseStock(o.items);
+ orders=orders.filter(x=>x.orderNo!==orderNo);
+ localStorage.setItem('cafePosOrders',JSON.stringify(orders));
+ const auditLogs=JSON.parse(localStorage.getItem('cafePosAuditLogs')||'[]');
+ auditLogs.unshift({action:'DELETE_ORDER',orderNo,actor:currentUser.name,reason:reason.trim(),total:o.total,deletedAt:new Date().toISOString()});
+ localStorage.setItem('cafePosAuditLogs',JSON.stringify(auditLogs.slice(0,200)));
+ renderAll();
+ toast('Transaksi '+orderNo+' berhasil dihapus');
+}
+
 function renderOrderInfo(){
  document.getElementById('orderTitle').textContent=state.orderNo||'Belum ada order';
  document.getElementById('orderMeta').textContent=state.orderNo?`${state.customer} · ${state.mode}${state.table?' · Table '+String(state.table).padStart(2,'0'):''} · ${state.pax} Pax${state.payment?' · '+state.payment:''}`:'Klik New Order untuk mulai';
@@ -355,85 +343,164 @@ function renderOrderInfo(){
  document.getElementById('payBtn').disabled=!state.orderNo||!state.items.length;document.getElementById('payBtn').textContent=editingOrderNo?'Simpan Perubahan':'Payment';
  document.getElementById('editBanner').innerHTML=editingOrderNo?`<div class="edit-banner">✏️ Edit receipt ${editingOrderNo} <button style="float:right;background:none;font-weight:700" onclick="cancelEdit()">Batal Edit</button></div>`:'';
 }
+
 function openPayment(){
  if(!state.items.length)return;const total=state.items.reduce((s,i)=>s+i.price*i.qty,0),pay=state.payment||'CASH';
  document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>${editingOrderNo?'Edit Receipt':'Payment'}</h2><div class="modal-sub">Total pembayaran: <b>${rupiah(total)}</b></div>
- <div class="payment">${['CASH','CARD','QRIS / BANK'].map(x=>`<button id="pay${x.replace(/\\W/g,'')}" class="pay ${x===pay?'selected':''}" onclick="pickPayment('${x}')">${x}</button>`).join('')}</div>
+ <div class="payment">${['CASH','CARD','QRIS / BANK'].map(x=>`<button id="pay${x.replace(/\W/g,'')}" class="pay ${x===pay?'selected':''}" onclick="pickPayment('${x}')">${x}</button>`).join('')}</div>
  <div class="actions"><button class="cancel" onclick="closeModal()">Cancel</button><button class="primary" style="margin:0" onclick="completePayment()">${editingOrderNo?'Simpan Receipt':'Confirm Payment'}</button></div></div></div>`;
  state.payment=pay;
 }
-function pickPayment(p){state.payment=p;document.querySelectorAll('.pay').forEach(x=>x.classList.remove('selected'));document.getElementById('pay'+p.replace(/\\W/g,'')).classList.add('selected')}
+
+function pickPayment(p){state.payment=p;document.querySelectorAll('.pay').forEach(x=>x.classList.remove('selected'));document.getElementById('pay'+p.replace(/\W/g,'')).classList.add('selected')}
+
 function completePayment(){
  const total=state.items.reduce((s,i)=>s+i.price*i.qty,0);
  const record={...JSON.parse(JSON.stringify(state)),cashier:currentUser.name,total,status:'PROCESSING',createdAt:editingOrderNo?(orders.find(o=>o.orderNo===editingOrderNo)?.createdAt||new Date().toISOString()):new Date().toISOString(),stationItems:state.items.map(i=>({...i,status:'NEW'}))};
- if(editingOrderNo){orders.unshift(record);editingOrderNo=null;editBackup=null;toast('Receipt berhasil diedit');}
- else {orders.unshift(record);consumeStock(state.items);toast('Pembayaran berhasil · '+state.payment);}
+ if(editingOrderNo){
+   orders.unshift(record);
+   consumeStock(state.items);
+   editingOrderNo=null;
+   editBackup=null;
+   toast('Receipt berhasil diedit');
+ } else {
+   orders.unshift(record);
+   consumeStock(state.items);
+   toast('Pembayaran berhasil · '+state.payment);
+ }
  localStorage.setItem('cafePosOrders',JSON.stringify(orders.slice(0,100)));
- if(record && !editingOrderNo){} else if(record){consumeStock(state.items)}
- state={customer:'',pax:1,table:null,mode:'DINE IN',items:[],orderNo:null,payment:null};closeModal();renderAll();renderStations();
+ state={customer:'',pax:1,table:null,mode:'DINE IN',items:[],orderNo:null,payment:null};
+ closeModal();
+ renderAll();
+ renderStations();
 }
+
 function startEditOrder(orderNo){
- if(currentUser.role!=='CASHIER'&&currentUser.role!=='ADMIN'){toast('Hanya kasir/admin yang dapat edit receipt');return}
+ if(currentUser.role!=='CASHIER'&&currentUser.role!=='HEAD_CASHIER'&&currentUser.role!=='ADMIN'){toast('Hanya kasir/admin yang dapat edit receipt');return}
  const o=orders.find(x=>x.orderNo===orderNo);if(!o)return;
  editBackup=JSON.parse(JSON.stringify(o));reverseStock(o.items);
  orders=orders.filter(x=>x.orderNo!==orderNo);localStorage.setItem('cafePosOrders',JSON.stringify(orders));
  editingOrderNo=orderNo;state={customer:o.customer,pax:o.pax,table:o.table,mode:o.mode,items:JSON.parse(JSON.stringify(o.items)),orderNo:o.orderNo,payment:o.payment};
  renderAll();toast('Receipt dibuka untuk diedit');
 }
+
 function cancelEdit(){
  if(!editingOrderNo||!editBackup)return;
  consumeStock(editBackup.items);orders.unshift(editBackup);localStorage.setItem('cafePosOrders',JSON.stringify(orders.slice(0,100)));
  editingOrderNo=null;editBackup=null;state={customer:'',pax:1,table:null,mode:'DINE IN',items:[],orderNo:null,payment:null};renderAll();toast('Edit dibatalkan');
 }
+
 function reverseStock(items){items.forEach(item=>(recipes[item.name]||[]).forEach(([id,qty])=>{const ing=inventory.find(x=>x.id===id);if(ing)ing.stock=+(ing.stock+qty*item.qty).toFixed(3)}));saveInventory()}
+
 function stationTickets(station){return orders.flatMap(o=>o.stationItems.filter(i=>i.station===station).length?[{o,items:o.stationItems.filter(i=>i.station===station)}]:[])}
+
 function renderStation(station,elId){
- const data=stationTickets(station),el=document.getElementById(elId);if(!data.length){el.innerHTML='<div class="empty">Belum ada pesanan '+station.toLowerCase()+'</div>';return}
+ const data=stationTickets(station),el=document.getElementById(elId);
+ if(!data.length){el.innerHTML='<div class="empty">Belum ada pesanan '+station.toLowerCase()+'</div>';return}
  el.innerHTML=data.map(({o,items})=>`<div class="ticket"><div class="row"><div><h3>${o.orderNo}</h3><small>${esc(o.customer)} · ${o.cashier||'-'} · ${o.mode}${o.table?' · T'+String(o.table).padStart(2,'0'):''}</small></div><span class="status">${items.every(i=>i.status==='READY')?'READY':'IN PROGRESS'}</span></div>${items.map(i=>`<div class="ticket-item"><b>${i.qty}x ${esc(i.name)}</b><div class="muted">${i.mods?.sweet||''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div><span class="status ${i.status}">${i.status}</span>${i.status!=='READY'?`<button onclick="advanceItem('${o.orderNo}','${i.key}')">${i.status==='NEW'?'Mulai':'Tandai Ready'}</button>`:''}</div>`).join('')}</div>`).join('');
 }
+
 function advanceItem(orderNo,key){const o=orders.find(x=>x.orderNo===orderNo);if(!o)return;const i=o.stationItems.find(x=>x.key===key);if(!i)return;i.status=i.status==='NEW'?'PREPARING':'READY';localStorage.setItem('cafePosOrders',JSON.stringify(orders));renderStations();toast(i.name+' → '+i.status)}
+
 function saveInventory(){localStorage.setItem('cafePosInventory',JSON.stringify(inventory))}
+
 function consumeStock(items){items.forEach(item=>(recipes[item.name]||[]).forEach(([id,qty])=>{const ing=inventory.find(x=>x.id===id);if(ing)ing.stock=Math.max(0,+(ing.stock-qty*item.qty).toFixed(3))}));saveInventory();renderStock();renderMenu()}
+
 function renderStock(){
  const low=inventory.filter(x=>x.stock<=x.min).length,out=inventory.filter(x=>x.stock<=0).length;
  document.getElementById('stockSummary').innerHTML=[['Total Items',inventory.length,'SKU monitored'],['Low Stock',low,'Need replenishment'],['Out of Stock',out,'Cannot produce safely'],['Warehouse','LIVE','Connected']].map(x=>`<div class="panel" style="padding:14px;border-radius:10px"><div class="muted">${x[0]}</div><div style="font-size:22px;font-weight:800;margin-top:5px">${x[1]}</div><div class="muted">${x[2]}</div></div>`).join('');
- document.getElementById('stockTable').innerHTML='<tr><th style="padding:10px;text-align:left">Ingredient</th><th style="text-align:left">Stock</th><th style="text-align:left">Min</th><th style="text-align:left">Warehouse</th><th style="text-align:left">Status</th></tr>'+inventory.map(x=>`<tr><td style="padding:10px;border-bottom:1px solid #eee"><b>${x.name}</b></td><td style="border-bottom:1px solid #eee">${x.stock} ${x.unit}</td><td style="border-bottom:1px solid #eee">${x.min} ${x.unit}</td><td style="border-bottom:1px solid #eee">${x.warehouse}</td><td style="border-bottom:1px solid #eee"><span class="status">${x.stock<=0?'OUT OF STOCK':x.stock<=x.min?'LOW':'AVAILABLE'}</span></td></tr>`).join('');
+ const tbl=document.getElementById('stockTable');
+ tbl.innerHTML='<tr><th>Ingredient</th><th>Stock</th><th>Min Stock</th><th>Unit</th><th>Status</th></tr>'+inventory.map(i=>{
+   const st=i.stock<=0?'EMPTY':(i.stock<=i.min?'LOW':'OK');
+   return `<tr><td><b>${esc(i.name)}</b></td><td>${i.stock}</td><td>${i.min}</td><td>${i.unit}</td><td><span class="status ${st==='EMPTY'?'unavailable':(st==='LOW'?'limited':'available')}">${st}</span></td></tr>`;
+ }).join('');
 }
-function syncWarehouse(){const s=document.getElementById('syncStatus');if(!s)return;s.textContent='⟳ Synchronizing POS ↔ Warehouse...';s.style.background='#fff2d8';setTimeout(()=>{s.textContent='● Connected · Last sync: '+new Date().toLocaleTimeString('id-ID');s.style.background='#e7f7eb';renderStock();renderMenu();toast('Warehouse stock synchronized')},800)}
-function getReportOrders(){
- const payment=document.getElementById('reportPayment')?.value||'ALL',cashier=document.getElementById('reportCashier')?.value||'ALL';
- return orders.filter(o=>(currentUser.role==='ADMIN'?cashier==='ALL'||o.cashier===cashier:o.cashier===currentUser.name)&&(payment==='ALL'||o.payment===payment));
+
+function syncWarehouse(){
+ saveInventory();
+ document.getElementById('syncStatus').textContent='● Connected · Last sync: '+new Date().toLocaleTimeString('id-ID');
+ toast('Stock & Warehouse disinkronkan');
+ renderAll();
 }
-function renderReport(){
- if(!currentUser||!currentUser.tabs.includes('report'))return;
- const select=document.getElementById('reportCashier');
- if(currentUser.role==='ADMIN'){
-   const names=[...new Set(orders.map(o=>o.cashier).filter(Boolean))];select.style.display='block';select.innerHTML='<option value="ALL">Semua Kasir</option>'+names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
- }else{select.style.display='none';select.innerHTML='<option value="'+esc(currentUser.name)+'">'+esc(currentUser.name)+'</option>'}
- const data=getReportOrders(),total=data.reduce((s,o)=>s+o.total,0),count=data.length;
- document.getElementById('reportScope').textContent=currentUser.role==='ADMIN'?'Laporan seluruh kasir atau pilih kasir tertentu.':'Laporan pribadi kasir '+currentUser.name+' berdasarkan transaksi yang dibuat oleh user ini.';
- const map={};data.forEach(o=>o.items.forEach(i=>{if(!map[i.name])map[i.name]={qty:0,revenue:0};map[i.name].qty+=i.qty;map[i.name].revenue+=i.qty*i.price}));
- document.getElementById('reportCards').innerHTML=[['Transactions',count,'orders'],['Gross Sales',rupiah(total),'filtered payments'],['Items Sold',data.reduce((s,o)=>s+o.items.reduce((a,i)=>a+i.qty,0),0),'menu quantity'],['Avg Transaction',count?rupiah(total/count):'Rp0','per order']].map(x=>`<div class="panel" style="padding:14px;border-radius:10px"><div class="muted">${x[0]}</div><div style="font-size:21px;font-weight:800;margin-top:5px">${x[1]}</div><div class="muted">${x[2]}</div></div>`).join('');
- const rows=Object.entries(map).sort((a,b)=>b[1].qty-a[1].qty);
- document.getElementById('salesReport').innerHTML=rows.length?'<tr><th>Menu</th><th>Qty</th><th>Total Uang</th></tr>'+rows.map(([n,v])=>`<tr><td><b>${esc(n)}</b></td><td>${v.qty}</td><td><b>${rupiah(v.revenue)}</b></td></tr>`).join(''):'<tr><td>Belum ada transaksi.</td></tr>';
- document.getElementById('transactionReport').innerHTML=data.length?'<tr><th>Order</th><th>Kasir</th><th>Payment</th><th>Items</th><th>Total</th><th>Waktu</th></tr>'+data.map(o=>`<tr><td>${o.orderNo}</td><td>${esc(o.cashier||'-')}</td><td>${o.payment}</td><td>${o.items.reduce((s,i)=>s+i.qty,0)}</td><td><b>${rupiah(o.total)}</b></td><td>${new Date(o.createdAt).toLocaleString('id-ID')}</td></tr>`).join(''):'<tr><td>Belum ada transaksi.</td></tr>';
-}
+
 function renderHistory(){
- const h=document.getElementById('history'),mine=currentUser?.role==='ADMIN'?orders:orders.filter(o=>o.cashier===currentUser?.name);
- if(!mine.length){h.innerHTML='<div class="muted" style="padding-top:10px">Belum ada transaksi.</div>';return}
- h.innerHTML=`<table><tr><th>Order</th><th>Total</th><th>Payment</th><th>Aksi</th></tr>${mine.slice(0,10).map(o=>`<tr><td>${o.orderNo}<div class="muted">${esc(o.cashier||'-')}</div></td><td>${rupiah(o.total)}</td><td>${o.payment}</td><td><button onclick="startEditOrder('${o.orderNo}')">Edit Receipt</button></td></tr>`).join('')}</table>`;
+ const h=document.getElementById('history');
+ if(!orders.length){h.innerHTML='<div class="empty">Belum ada transaksi</div>';return}
+ h.innerHTML='<div style="overflow:auto"><table style="width:100%;border-collapse:collapse;margin-top:8px"><thead><tr><th>Order</th><th>Cust</th><th>Total</th><th>Pay</th><th>Aksi</th></tr></thead><tbody>'+orders.slice(0,10).map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${esc(o.customer)}</td><td>${rupiah(o.total)}</td><td>${o.payment||'-'}</td><td><button onclick="startEditOrder('${o.orderNo}')">Edit</button></td></tr>`).join('')+'</tbody></table></div>';
 }
+
 function renderStations(){
- if(!document.getElementById('barTickets'))return;renderStation('BAR','barTickets');renderStation('KITCHEN','kitchenTickets');
- const b=stationTickets('BAR').reduce((n,x)=>n+x.items.filter(i=>i.status!=='READY').length,0),k=stationTickets('KITCHEN').reduce((n,x)=>n+x.items.filter(i=>i.status!=='READY').length,0);
- const bc=document.getElementById('barCount'),kc=document.getElementById('kitchenCount');if(bc)bc.textContent=b?' · '+b:'';if(kc)kc.textContent=k?' · '+k:'';
+ renderStation('BAR','barTickets');
+ renderStation('KITCHEN','kitchenTickets');
+ const bc=document.getElementById('barCount'), kc=document.getElementById('kitchenCount');
+ const bLen=stationTickets('BAR').length, kLen=stationTickets('KITCHEN').length;
+ if(bc) bc.textContent=bLen?` (${bLen})`:'';
+ if(kc) kc.textContent=kLen?` (${kLen})`:'';
 }
-function renderAll(){renderMenu();renderCart();renderOrderInfo();renderHistory();renderStations();renderStock();renderReport()}
+
+function renderReport(){
+ const cashiers=['ALL',...new Set(orders.map(o=>o.cashier).filter(Boolean))];
+ const selC=document.getElementById('reportCashier');
+ const curC=selC.value||'ALL';
+ selC.innerHTML=cashiers.map(c=>`<option value="${c}" ${c===curC?'selected':''}>${c==='ALL'?'Semua Kasir':'Kasir: '+c}</option>`).join('');
+
+ const pFilter=document.getElementById('reportPayment').value;
+ const cFilter=selC.value;
+
+ const filtered=orders.filter(o=>{
+   const pOk=pFilter==='ALL'||o.payment===pFilter;
+   const cOk=cFilter==='ALL'||o.cashier===cFilter;
+   return pOk&&cOk;
+ });
+
+ const totalRev=filtered.reduce((s,o)=>s+o.total,0);
+ document.getElementById('reportScope').textContent=`Menampilkan ${filtered.length} transaksi (Total: ${rupiah(totalRev)})`;
+
+ document.getElementById('reportCards').innerHTML=[
+   ['Total Revenue',rupiah(totalRev),'Penjualan bersih'],
+   ['Total Orders',filtered.length,'Jumlah transaksi'],
+   ['Avg Order Value',filtered.length?rupiah(totalRev/filtered.length):'Rp0','Rata-rata per receipt']
+ ].map(x=>`<div class="panel" style="padding:14px;border-radius:10px"><div class="muted">${x[0]}</div><div style="font-size:20px;font-weight:800;margin-top:5px">${x[1]}</div><div class="muted">${x[2]}</div></div>`).join('');
+
+ const itemSales={};
+ filtered.forEach(o=>o.items.forEach(i=>{
+   if(!itemSales[i.name])itemSales[i.name]={qty:0,rev:0};
+   itemSales[i.name].qty+=i.qty;
+   itemSales[i.name].rev+=i.price*i.qty;
+ }));
+
+ const salesArr=Object.entries(itemSales).sort((a,b)=>b[1].rev-a[1].rev);
+ document.getElementById('salesReport').innerHTML='<tr><th>Item</th><th>Qty Sold</th><th>Total Revenue</th></tr>'+(salesArr.length?salesArr.map(([k,v])=>`<tr><td><b>${esc(k)}</b></td><td>${v.qty}</td><td>${rupiah(v.rev)}</td></tr>`).join(''):'<tr><td colspan="3" class="muted">Tidak ada data</td></tr>');
+
+ const canDelete=currentUser.role==='ADMIN'||currentUser.role==='HEAD_CASHIER';
+document.getElementById('transactionReport').innerHTML='<tr><th>Order No</th><th>Time</th><th>Cashier</th><th>Mode</th><th>Payment</th><th>Total</th>'+(canDelete?'<th>Aksi</th>':'')+'</tr>'+(filtered.length?filtered.map(o=>`<tr><td><b>${o.orderNo}</b></td><td>${new Date(o.createdAt).toLocaleTimeString('id-ID')}</td><td>${o.cashier||'-'}</td><td>${o.mode}</td><td>${o.payment||'-'}</td><td>${rupiah(o.total)}</td>${canDelete?`<td><button onclick="deleteOrder('${o.orderNo}')">Hapus</button></td>`:''}</tr>`).join(''):'<tr><td colspan="'+(canDelete?7:6)+'" class="muted">Tidak ada data</td></tr>');
+}
+
+function renderAll(){
+ renderMenu();
+ renderCart();
+ renderOrderInfo();
+ renderHistory();
+ renderStations();
+ renderStock();
+ renderReport();
+}
+
 function closeModal(){document.getElementById('modalRoot').innerHTML=''}
-function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';clearTimeout(window._toast);window._toast=setTimeout(()=>t.style.display='none',2200)}
-function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}
-const saved=sessionStorage.getItem('cafePosUser');if(saved&&users[saved]){currentUser=users[saved];showApp()}
-tick();setInterval(tick,1000);
+
+function toast(msg){
+ const t=document.getElementById('toast');
+ t.textContent=msg; t.style.display='block';
+ setTimeout(()=>{t.style.display='none'},2500);
+}
+
+window.addEventListener('DOMContentLoaded',()=>{
+ const saved=sessionStorage.getItem('cafePosUser');
+ if(saved && users[saved]){
+   currentUser=users[saved];
+   showApp();
+ }
+});
 </script>
 </body>
 </html>
