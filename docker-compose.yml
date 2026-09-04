@@ -11,14 +11,15 @@ services:
     build: ./backend
     environment:
       DATABASE_URL: postgres://cafe:cafe_password@db:5432/cafe_pos
-      JWT_SECRET: change-this-in-production
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is not set — copy .env.example to .env and set a real value}
       PORT: 4000
     ports: ["4000:4000"]
     depends_on: [db]
   frontend:
-    build: ./frontend
-    environment:
-      VITE_API_URL: http://localhost:4000/api
+    build:
+      context: ./frontend
+      args:
+        VITE_API_URL: http://localhost:4000/api
     ports: ["5173:80"]
     depends_on: [backend]
 volumes:

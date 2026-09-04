@@ -12,7 +12,11 @@ const pool = new Pool({
     'postgres://cafe:cafe_password@localhost:5432/cafe_pos',
 });
 
-const secret = process.env.JWT_SECRET || 'dev-secret';
+const secret = process.env.JWT_SECRET;
+if (!secret) {
+  throw new Error('JWT_SECRET environment variable is required');
+}
+
 const port = process.env.PORT || 4000;
 
 // ============================================================
