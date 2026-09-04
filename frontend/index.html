@@ -97,7 +97,7 @@ label{font-size:13px;font-weight:700;display:block;margin:12px 0 6px}input[type=
 <div id="editBanner"></div>
 <div class="order-head"><div class="order-title" id="orderTitle">Belum ada order</div><div class="meta" id="orderMeta">Klik New Order untuk mulai</div></div>
 <div id="cart" class="cart"><div class="empty">Belum ada item</div></div>
-<div class="summary"><div class="sumrow"><span>Subtotal</span><b id="subtotal">Rp0</b></div><div class="sumrow"><span>Tax</span><span>Rp0</span></div><div class="sumrow total"><span>Total</span><span id="total">Rp0</span></div><button id="payBtn" class="primary" onclick="openPayment()" disabled>Payment</button></div>
+<div class="summary"><div class="sumrow"><span>Subtotal</span><b id="subtotal">Rp0</b></div><div class="sumrow"><span>Tax (10%)</span><span id="taxAmount">Rp0</span></div><div class="sumrow total"><span>Total</span><span id="total">Rp0</span></div><button id="payBtn" class="primary" onclick="openPayment()" disabled>Payment</button></div>
 </aside>
 </section>
 
@@ -148,6 +148,8 @@ const menus=[
 {id:10,name:'French Fries',cat:'FOOD',price:18000,emoji:'🍟',station:'KITCHEN',mods:null}
 ];
 const tables=Array.from({length:100},(_,i)=>i+1);
+const TAX_RATE=0.10;
+const calcTax=subtotal=>Math.round(subtotal*TAX_RATE);
 const users={
 gary:{name:'Gary',role:'CASHIER',tabs:['cashier','bar','kitchen','report']},
 head_cashier:{name:'Head Cashier',role:'HEAD_CASHIER',tabs:['cashier','bar','kitchen','report']},
@@ -254,14 +256,14 @@ function openNewOrder(){
 }
 
 function setPax(n){state.pax=n;[1,2,3,4,5,6].forEach(x=>document.getElementById('pax'+x).classList.toggle('selected',x===n))}
-function setMode(m){state.mode=m;document.getElementById('modeD').classList.toggle('selected',m==='DINE IN');document.getElementById('modeT').classList.toggle('selected',m==='TAKE AWAY');document.getElementById('tableArea').style.display=m==='DINE IN'?'block':'none'}
+function setMode(m){state.mode=m;document.getElementById('modeD').classList.toggle('selected',m==='DINE IN');document.getElementById('modeT').classList.toggle('selected',m==='TAKE AWAY')}
 function setTable(n){state.table=n;tables.forEach(x=>document.getElementById('tbl'+x).classList.toggle('selected',x===n))}
 
 function startOrder(){
  const custName=document.getElementById('cust').value.trim();
  if(!custName){toast('Nama customer wajib diisi');return}
  state.customer=custName;
- if(state.mode==='DINE IN'&&!state.table){toast('Pilih table terlebih dahulu');return}
+ if(!state.table){toast('Pilih table terlebih dahulu');return}
  state.orderNo='ORD-'+String(Date.now()).slice(-6);closeModal();renderAll();toast('Order '+state.orderNo+' dibuat');
 }
 
@@ -449,7 +451,7 @@ function viewDeletedOrder(orderNo){
 function renderOrderInfo(){
  document.getElementById('orderTitle').textContent=state.orderNo||'Belum ada order';
  document.getElementById('orderMeta').textContent=state.orderNo?`${state.customer} · ${state.mode}${state.table?' · Table '+String(state.table).padStart(2,'0'):''} · ${state.pax} Pax${state.payment?' · '+state.payment:''}`:'Klik New Order untuk mulai';
- const total=state.items.reduce((s,i)=>s+i.price*i.qty,0);document.getElementById('subtotal').textContent=rupiah(total);document.getElementById('total').textContent=rupiah(total);
+ const subtotal=state.items.reduce((s,i)=>s+i.price*i.qty,0),tax=calcTax(subtotal),total=subtotal+tax;document.getElementById('subtotal').textContent=rupiah(subtotal);document.getElementById('taxAmount').textContent=rupiah(tax);document.getElementById('total').textContent=rupiah(total);
  document.getElementById('payBtn').disabled=!state.orderNo||!state.items.length;document.getElementById('payBtn').textContent=editingOrderNo?'Simpan Perubahan':'Payment';
  document.getElementById('editBanner').innerHTML=editingOrderNo?`<div class="edit-banner">✏️ Edit receipt ${editingOrderNo} <button style="float:right;background:none;font-weight:700" onclick="cancelEdit()">Batal Edit</button></div>`:'';
 }
@@ -457,8 +459,8 @@ function renderOrderInfo(){
 function openPayment(){
  if(!state.items.length)return;
  if(!editingOrderNo&&['CASHIER','HEAD_CASHIER'].includes(currentUser.role)&&!openShiftFor(currentUser.name)){toast('Buka shift terlebih dahulu sebelum menerima order');return}
- const total=state.items.reduce((s,i)=>s+i.price*i.qty,0),pay=state.payment||'CASH';
- document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>${editingOrderNo?'Edit Receipt':'Payment'}</h2><div class="modal-sub">Total pembayaran: <b>${rupiah(total)}</b></div>
+ const subtotal=state.items.reduce((s,i)=>s+i.price*i.qty,0),tax=calcTax(subtotal),total=subtotal+tax,pay=state.payment||'CASH';
+ document.getElementById('modalRoot').innerHTML=`<div class="overlay"><div class="modal"><h2>${editingOrderNo?'Edit Receipt':'Payment'}</h2><div class="modal-sub">Subtotal: ${rupiah(subtotal)} · Tax (10%): ${rupiah(tax)}<br>Total pembayaran: <b>${rupiah(total)}</b></div>
  <div class="payment">${['CASH','CARD','QRIS / BANK'].map(x=>`<button id="pay${x.replace(/\W/g,'')}" class="pay ${x===pay?'selected':''}" onclick="pickPayment('${x}')">${x}</button>`).join('')}</div>
  <div class="actions"><button class="cancel" onclick="closeModal()">Cancel</button><button class="primary" style="margin:0" onclick="completePayment()">${editingOrderNo?'Simpan Receipt':'Confirm Payment'}</button></div></div></div>`;
  state.payment=pay;
@@ -467,9 +469,9 @@ function openPayment(){
 function pickPayment(p){state.payment=p;document.querySelectorAll('.pay').forEach(x=>x.classList.remove('selected'));document.getElementById('pay'+p.replace(/\W/g,'')).classList.add('selected')}
 
 function completePayment(){
- const total=state.items.reduce((s,i)=>s+i.price*i.qty,0);
+ const subtotal=state.items.reduce((s,i)=>s+i.price*i.qty,0),tax=calcTax(subtotal),total=subtotal+tax;
  const shift=openShiftFor(currentUser.name);
- const record={...JSON.parse(JSON.stringify(state)),cashier:currentUser.name,shiftId:shift?shift.id:null,total,status:'PROCESSING',createdAt:editingOrderNo?(orders.find(o=>o.orderNo===editingOrderNo)?.createdAt||new Date().toISOString()):new Date().toISOString(),stationItems:state.items.map(i=>({...i,status:'NEW'}))};
+ const record={...JSON.parse(JSON.stringify(state)),cashier:currentUser.name,shiftId:shift?shift.id:null,subtotal,tax,total,status:'PROCESSING',createdAt:editingOrderNo?(orders.find(o=>o.orderNo===editingOrderNo)?.createdAt||new Date().toISOString()):new Date().toISOString(),stationItems:state.items.map(i=>({...i,status:'NEW'}))};
  if(editingOrderNo){
    orders.unshift(record);
    consumeStock(state.items);
@@ -540,6 +542,8 @@ function printReceipt(orderNo){
   <hr>
   ${o.items.map(i=>`<div class="rline"><span>${i.qty}x ${esc(i.name)}</span><span>${rupiah(i.price*i.qty)}</span></div>${i.mods?.sweet||i.mods?.ice||i.note?`<div style="font-size:10px;color:#555">${i.mods?.sweet||''}${i.mods?.ice?' · '+i.mods.ice:''}${i.note?' · '+esc(i.note):''}</div>`:''}`).join('')}
   <hr>
+  <div class="rline"><span>Subtotal</span><span>${rupiah(o.subtotal??(o.total-(o.tax||0)))}</span></div>
+  <div class="rline"><span>Tax (10%)</span><span>${rupiah(o.tax||0)}</span></div>
   <div class="rline big"><span>TOTAL</span><span>${rupiah(o.total)}</span></div>
   <div class="rline"><span>Payment</span><span>${o.payment||'-'}</span></div>
   <hr>
